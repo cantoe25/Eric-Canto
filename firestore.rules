@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Portfolio settings & Hero Video (Public read, create/update with validation)
+    match /portfolio_settings/{settingId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['url', 'title', 'updatedAt'])
+                   && request.resource.data.url is string
+                   && request.resource.data.title is string
+                   && request.resource.data.updatedAt is string;
+    }
+
+    // Contact messages (Public write with validation, read disabled publicly for privacy)
+    match /contact_messages/{messageId} {
+      allow create: if request.resource.data.keys().hasAll(['name', 'email', 'message', 'createdAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.email is string
+                    && request.resource.data.message is string
+                    && request.resource.data.createdAt is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.email.size() > 0;
+      allow read, update, delete: if false;
+    }
+
+    // Scheduled appointments (Public create with validation)
+    match /appointments/{appointmentId} {
+      allow create: if request.resource.data.keys().hasAll(['name', 'email', 'date', 'time', 'createdAt'])
+                    && request.resource.data.name is string
+                    && request.resource.data.email is string
+                    && request.resource.data.date is string
+                    && request.resource.data.time is string
+                    && request.resource.data.createdAt is string;
+      allow read, update, delete: if false;
+    }
+  }
+}

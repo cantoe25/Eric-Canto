@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "heroVideo": {
+      "title": "HeroVideo",
+      "description": "Configuración del video de presentación vertical 9:16 almacenado en la nube",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL del video en YouTube, Shorts, Vimeo o enlace directo a MP4"
+        },
+        "title": {
+          "type": "string",
+          "description": "Título o descripción del video"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Marca de tiempo de última actualización ISO 8601"
+        },
+        "aspectRatio": {
+          "type": "string",
+          "description": "Relación de aspecto del video (ej. 9:16)"
+        }
+      },
+      "required": ["url", "title", "updatedAt"]
+    },
+    "contactMessage": {
+      "title": "ContactMessage",
+      "description": "Mensaje enviado desde el formulario de contacto directo",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Nombre del remitente"
+        },
+        "email": {
+          "type": "string",
+          "description": "Correo electrónico de contacto"
+        },
+        "message": {
+          "type": "string",
+          "description": "Contenido del mensaje"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Fecha y hora de envío en formato ISO"
+        }
+      },
+      "required": ["name", "email", "message", "createdAt"]
+    },
+    "appointment": {
+      "title": "Appointment",
+      "description": "Cita agendada para videollamada con Eric",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Nombre de quien agenda la llamada"
+        },
+        "email": {
+          "type": "string",
+          "description": "Correo para la invitación de Google Meet"
+        },
+        "date": {
+          "type": "string",
+          "description": "Fecha seleccionada"
+        },
+        "time": {
+          "type": "string",
+          "description": "Hora seleccionada"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Notas o tema a tratar"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Fecha y hora de creación"
+        }
+      },
+      "required": ["name", "email", "date", "time", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/portfolio_settings/{settingId}": {
+      "schema": "heroVideo",
+      "description": "Ajustes globales y configuración del video de presentación en la nube"
+    },
+    "/contact_messages/{messageId}": {
+      "schema": "contactMessage",
+      "description": "Mensajes enviados por reclutadores y visitantes"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": "appointment",
+      "description": "Citas de videollamadas agendadas en la nube"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-sans: "Manrope", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-surface: #ebedf0;
+  --color-surface-bright: #f8f9fc;
+  --color-surface-dim: #d9dadd;
+  --color-on-surface: #191c1e;
+  --color-primary: #000000;
+  --color-on-primary: #ffffff;
+  --color-secondary: #5e5e5e;
+}
+
+/* Neumorphic shadow classes */
+.shadow-neu-flat {
+  box-shadow: 6px 6px 14px rgba(184, 190, 202, 0.45), -6px -6px 14px rgba(255, 255, 255, 0.95);
+}
+
+.shadow-neu-raised {
+  box-shadow: 8px 8px 20px rgba(180, 186, 199, 0.55), -8px -8px 20px rgba(255, 255, 255, 1.0);
+}
+
+.shadow-neu-pill {
+  box-shadow: 4px 4px 10px rgba(184, 190, 202, 0.45), -4px -4px 10px rgba(255, 255, 255, 0.95);
+}
+
+.shadow-neu-sm {
+  box-shadow: 3px 3px 7px rgba(184, 190, 202, 0.4), -3px -3px 7px rgba(255, 255, 255, 0.95);
+}
+
+.shadow-neu-inset {
+  box-shadow: inset 3px 3px 6px rgba(175, 181, 193, 0.55), inset -3px -3px 6px rgba(255, 255, 255, 0.95);
+}
+
+.shadow-neu-inset-deep {
+  box-shadow: inset 4px 4px 8px rgba(170, 176, 188, 0.6), inset -4px -4px 8px rgba(255, 255, 255, 0.95);
+}
+
+.shadow-neu-dark {
+  box-shadow: 6px 6px 16px rgba(0, 0, 0, 0.25), -3px -3px 8px rgba(255, 255, 255, 0.85);
+}
+
+/* Tactile interaction state */
+.neu-pressed:active {
+  box-shadow: inset 3px 3px 6px rgba(175, 181, 193, 0.65), inset -3px -3px 6px rgba(255, 255, 255, 0.95) !important;
+  transform: translateY(1px);
+}
+
+/* Smooth selection and printing */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}

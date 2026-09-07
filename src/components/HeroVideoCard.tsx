@@ -27,7 +27,76 @@ import {
   removeHeroVideoFromCloud, 
   CloudVideoData 
 } from '../lib/firebase';
-import { upload } from '@vercel/blob/client';
+
+const DEFAULT_BLOB_TOKEN = 'vercel_blob_rw_CDhY9cR23cklkNua_kap0FFkXNSjySxW8uFCvQD4Uc3UnYc';
+
+// Direct browser upload to Vercel Blob API (works across all deployed hosts: Vercel, Netlify, Cloud Run, etc.)
+async function uploadDirectToVercelBlob(
+  file: File,
+  token: string,
+  onProgress: (pct: number) => void
+): Promise<{ url: string; downloadUrl?: string; pathname: string }> {
+  const cleanFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const pathname = `videos/${Date.now()}-${cleanFilename}`;
+  const apiUrl = `https://blob.vercel-storage.com/${pathname}`;
+
+  const sendRequest = (access: 'private' | 'public'): Promise<{ url: string; downloadUrl?: string; pathname: string }> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', apiUrl, true);
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      xhr.setRequestHeader('x-api-version', '7');
+      xhr.setRequestHeader('x-vercel-blob-access', access);
+      xhr.setRequestHeader('x-add-random-suffix', '1');
+      if (file.type) {
+        xhr.setRequestHeader('Content-Type', file.type);
+      }
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          onProgress(pct);
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data);
+          } catch (e) {
+            reject(new Error('Respuesta no válida de Vercel Blob'));
+          }
+        } else {
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            const msg = errData?.error?.message || `Error ${xhr.status}`;
+            const err: any = new Error(msg);
+            err.status = xhr.status;
+            reject(err);
+          } catch {
+            reject(new Error(`Error ${xhr.status}: ${xhr.statusText}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error('Fallo de conexión al subir el archivo a Vercel Blob'));
+      };
+
+      xhr.send(file);
+    });
+  };
+
+  try {
+    return await sendRequest('private');
+  } catch (err: any) {
+    if (err.message && (err.message.includes('public') || err.message.includes('Public'))) {
+      return await sendRequest('public');
+    }
+    throw err;
+  }
+}
 
 export interface ParsedVideo {
   type: 'iframe' | 'html5';
@@ -331,7 +400,7 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
     await handleSaveToCloud(inputUrl.trim(), inputTitle.trim() || 'Pitch Personal (9:16)');
   };
 
-  // Upload file directly to Vercel Blob (supports any size up to 500 MB without proxy limits)
+  // Upload file directly to Vercel Blob (supports any size up to 500 MB, independent of backend hosting)
   const handleVercelBlobUpload = async () => {
     if (!selectedFile) return;
     try {
@@ -339,30 +408,19 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
       setUploadError(null);
       setUploadProgressMsg(`Conectando con Vercel Blob para subir ${selectedFile.name} (${fileSizeMb.toFixed(1)} MB)...`);
 
-      const effectiveToken = userBlobToken.trim();
-      const cleanFilename = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const pathname = `videos/${Date.now()}-${cleanFilename}`;
+      const tokenToUse = userBlobToken.trim() || DEFAULT_BLOB_TOKEN;
 
-      // Upload directly from browser to Vercel Edge Storage (bypasses Nginx proxy body size limits)
-      const blob = await upload(pathname, selectedFile, {
-        access: 'private',
-        handleUploadUrl: '/api/blob-upload-handler',
-        headers: effectiveToken ? { 'x-blob-token': effectiveToken } : undefined,
-        clientPayload: effectiveToken ? JSON.stringify({ token: effectiveToken }) : undefined,
-        onUploadProgress: (progress) => {
-          const pct = Math.round(progress.percentage);
+      // Upload directly from browser to Vercel global CDN edge (bypasses proxy and token-handler issues)
+      const blob = await uploadDirectToVercelBlob(
+        selectedFile,
+        tokenToUse,
+        (pct) => {
           setUploadProgressMsg(`Subiendo a Vercel Blob: ${pct}% (${fileSizeMb.toFixed(1)} MB)...`);
         }
-      });
+      );
 
       if (!blob || !blob.url) {
         throw new Error('No se recibió la URL de Vercel Blob.');
-      }
-
-      // Remember token if supplied by user
-      if (effectiveToken) {
-        localStorage.setItem('VERCEL_BLOB_TOKEN', effectiveToken);
-        setBlobConfigured(true);
       }
 
       setUploadProgressMsg('¡Video subido a Vercel Blob! Guardando en Firebase Firestore...');

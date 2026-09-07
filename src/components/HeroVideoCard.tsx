@@ -27,6 +27,7 @@ import {
   removeHeroVideoFromCloud, 
   CloudVideoData 
 } from '../lib/firebase';
+import { upload } from '@vercel/blob/client';
 
 export interface ParsedVideo {
   type: 'iframe' | 'html5';
@@ -185,7 +186,7 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Vercel Blob status and upload state
-  const [blobConfigured, setBlobConfigured] = useState<boolean>(false);
+  const [blobConfigured, setBlobConfigured] = useState<boolean>(true);
   const [userBlobToken, setUserBlobToken] = useState<string>(() => {
     return localStorage.getItem('VERCEL_BLOB_TOKEN') || '';
   });
@@ -330,35 +331,31 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
     await handleSaveToCloud(inputUrl.trim(), inputTitle.trim() || 'Pitch Personal (9:16)');
   };
 
-  // Upload file directly to Vercel Blob (supports any size up to 500 MB)
+  // Upload file directly to Vercel Blob (supports any size up to 500 MB without proxy limits)
   const handleVercelBlobUpload = async () => {
     if (!selectedFile) return;
     try {
       setUploadingToBlob(true);
       setUploadError(null);
-      setUploadProgressMsg(`Conectando y subiendo ${selectedFile.name} (${fileSizeMb.toFixed(1)} MB) a Vercel Blob...`);
+      setUploadProgressMsg(`Conectando con Vercel Blob para subir ${selectedFile.name} (${fileSizeMb.toFixed(1)} MB)...`);
 
       const effectiveToken = userBlobToken.trim();
-      const headers: Record<string, string> = {
-        'Content-Type': selectedFile.type || 'video/mp4',
-      };
-      if (effectiveToken) {
-        headers['x-blob-token'] = effectiveToken;
-      }
+      const cleanFilename = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const pathname = `videos/${Date.now()}-${cleanFilename}`;
 
-      const res = await fetch(`/api/upload-blob?filename=${encodeURIComponent(selectedFile.name)}`, {
-        method: 'POST',
-        headers,
-        body: selectedFile,
+      // Upload directly from browser to Vercel Edge Storage (bypasses Nginx proxy body size limits)
+      const blob = await upload(pathname, selectedFile, {
+        access: 'private',
+        handleUploadUrl: '/api/blob-upload-handler',
+        headers: effectiveToken ? { 'x-blob-token': effectiveToken } : undefined,
+        clientPayload: effectiveToken ? JSON.stringify({ token: effectiveToken }) : undefined,
+        onUploadProgress: (progress) => {
+          const pct = Math.round(progress.percentage);
+          setUploadProgressMsg(`Subiendo a Vercel Blob: ${pct}% (${fileSizeMb.toFixed(1)} MB)...`);
+        }
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Error en la subida a Vercel Blob (${res.status})`);
-      }
-
-      const data = await res.json();
-      if (!data.url) {
+      if (!blob || !blob.url) {
         throw new Error('No se recibió la URL de Vercel Blob.');
       }
 
@@ -368,8 +365,8 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
         setBlobConfigured(true);
       }
 
-      setUploadProgressMsg('¡Subido a Vercel Blob! Guardando en Firebase Firestore...');
-      await handleSaveToCloud(data.url, inputTitle.trim() || selectedFile.name);
+      setUploadProgressMsg('¡Video subido a Vercel Blob! Guardando en Firebase Firestore...');
+      await handleSaveToCloud(blob.url, inputTitle.trim() || selectedFile.name);
     } catch (err: any) {
       console.error('Vercel Blob upload error:', err);
       setUploadError(err.message || 'Error al subir el video a Vercel Blob.');
@@ -846,51 +843,22 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
                   />
                 </div>
 
-                {/* Vercel Blob Token Configuration Box */}
-                <div className="p-3 rounded-2xl bg-[#e2e5e9] border border-white/80 space-y-2">
+                {/* Vercel Blob Cloud Storage Banner */}
+                <div className="p-3 rounded-2xl bg-[#e2e5e9] border border-white/80 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5 font-['JetBrains_Mono'] text-xs font-bold text-black">
-                      <Key className="w-3.5 h-3.5 text-neutral-700" />
-                      <span>Vercel Blob Storage</span>
+                      <Cloud className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Vercel Blob Storage CDN</span>
                     </div>
-                    {blobConfigured ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-['JetBrains_Mono'] text-[9px] font-bold flex items-center gap-1">
-                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                        Conectado en Servidor
-                      </span>
-                    ) : userBlobToken.trim() ? (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-['JetBrains_Mono'] text-[9px] font-bold flex items-center gap-1">
-                        <Check className="w-3 h-3 text-blue-600" />
-                        Token Ingresado
-                      </span>
-                    ) : (
-                      <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-['JetBrains_Mono'] text-[9px]">
-                        Ingresar Token
-                      </span>
-                    )}
-                  </div>
-
-                  {!blobConfigured && (
-                    <div>
-                      <input
-                        type="password"
-                        value={userBlobToken}
-                        onChange={(e) => setUserBlobToken(e.target.value)}
-                        placeholder="Pega tu token de Vercel Blob (vercel_blob_rw_...)"
-                        className="w-full px-3 py-2 rounded-xl bg-white/90 shadow-neu-inset border border-slate-200 text-xs font-['JetBrains_Mono'] text-black placeholder:text-neutral-400 focus:outline-none focus:ring-1 focus:ring-black"
-                      />
-                      <p className="mt-1 text-[10px] font-['Manrope'] text-neutral-600 leading-tight">
-                        Pega tu token aquí o compártelo en el chat para guardarlo en las variables de entorno de tu proyecto.
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="text-[10px] font-['Manrope'] text-neutral-600 flex items-start gap-1.5 pt-0.5">
-                    <Cloud className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-                    <span>
-                      Vercel Blob permite subir videos de hasta <strong>500 MB</strong> sin límite de Firestore, y los transmite a través de su CDN global ultra-rápida.
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-['JetBrains_Mono'] text-[9px] font-bold flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                      Conectado en Servidor
                     </span>
                   </div>
+
+                  <p className="text-[10px] font-['Manrope'] text-neutral-600 leading-tight">
+                    Tu almacenamiento en la nube está activo. Puedes subir archivos de video de hasta <strong>500 MB</strong> sin límite de Firestore, y se reproducirán a través de CDN de alta velocidad.
+                  </p>
                 </div>
 
                 {/* Status indicator during upload */}
@@ -932,7 +900,7 @@ export const HeroVideoCard: React.FC<HeroVideoCardProps> = ({ className = '' }) 
                   <button
                     type="button"
                     onClick={handleVercelBlobUpload}
-                    disabled={uploadingToBlob || savingCloud || !selectedFile || (!canUseVercelBlob && fileSizeMb > 1.0)}
+                    disabled={uploadingToBlob || savingCloud || !selectedFile}
                     className="px-4 py-2 rounded-xl bg-black text-white font-['JetBrains_Mono'] text-xs font-semibold shadow-neu-dark hover:bg-neutral-800 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {uploadingToBlob ? (

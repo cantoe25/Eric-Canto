@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { Readable } from 'stream';
 import { createServer as createViteServer } from 'vite';
 import { put, get } from '@vercel/blob';
+import { handleUpload } from '@vercel/blob/client';
 
 dotenv.config();
 
@@ -46,6 +47,42 @@ app.post('/api/set-blob-token', express.json(), (req, res) => {
     success: true, 
     message: 'Token de Vercel Blob configurado correctamente para esta sesión.' 
   });
+});
+
+// 3.5. API: Direct Client Upload token handler (bypasses reverse proxy size limits)
+app.post('/api/blob-upload-handler', express.json(), async (req, res) => {
+  try {
+    const headerToken = req.headers['x-blob-token'] as string | undefined;
+    const token = headerToken?.trim() || getBlobToken();
+    if (!token) {
+      return res.status(400).json({ error: 'BLOB_READ_WRITE_TOKEN no está configurado.' });
+    }
+
+    const body = req.body;
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      token,
+      onBeforeGenerateToken: async (pathname) => {
+        return {
+          maximumSizeInBytes: 500 * 1024 * 1024, // 500 MB
+          addRandomSuffix: true,
+          allowedContentTypes: [
+            'video/mp4',
+            'video/webm',
+            'video/quicktime',
+            'video/x-matroska',
+            'video/ogg'
+          ]
+        };
+      }
+    });
+
+    return res.json(jsonResponse);
+  } catch (error: any) {
+    console.error('Error in blob-upload-handler:', error);
+    return res.status(500).json({ error: error?.message || 'Error al autorizar subida directa' });
+  }
 });
 
 // 4. API: Upload video stream directly to Vercel Blob (supports large files up to 500 MB)

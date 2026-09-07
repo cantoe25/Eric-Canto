@@ -58,14 +58,18 @@ export function parseVideoUrl(rawUrl?: string): ParsedVideo | null {
 
   // 0.5. Vercel Blob Storage CDN
   if (url.includes('vercel-storage.com')) {
+    const isPrivate = url.includes('private.blob.vercel-storage.com');
+    const embedUrl = isPrivate 
+      ? `/api/video-proxy?url=${encodeURIComponent(url)}` 
+      : url;
     return {
       type: 'html5',
       provider: 'vercel',
-      providerLabel: 'Vercel Blob (CDN Global)',
-      embedUrl: url,
+      providerLabel: 'Vercel Blob',
+      embedUrl,
       originalUrl: url,
       directLink: url,
-      tips: 'Video alojado en Vercel Blob con CDN global de alta velocidad.'
+      tips: 'Video alojado en Vercel Blob con CDN de alta velocidad.'
     };
   }
 
